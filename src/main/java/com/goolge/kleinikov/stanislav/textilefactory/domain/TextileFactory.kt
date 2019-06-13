@@ -2,53 +2,49 @@ package com.goolge.kleinikov.stanislav.textilefactory.domain
 
 import com.goolge.kleinikov.stanislav.textilefactory.domain.Department.ExecutionDepartment.*
 import com.goolge.kleinikov.stanislav.textilefactory.domain.Department.QualityDepartment.*
-import com.goolge.kleinikov.stanislav.textilefactory.domain.Material.RawMaterials
+import com.goolge.kleinikov.stanislav.textilefactory.usecase.Transporter
 import io.reactivex.Observable
-import java.text.DateFormat
-import java.util.*
+import io.reactivex.disposables.CompositeDisposable
+import io.reactivex.schedulers.Schedulers
+import java.lang.Thread.sleep
 
 import java.util.concurrent.TimeUnit
+import kotlin.random.Random
 
-class TextileFactory {
+class TextileFactory private constructor(
+    private val storage: Storage = Storage(),
+    private val transporter: Transporter = Transporter(storage, Schedulers.io()),
+    private val rawQualityDepartments: List<RawQualityDepartment> = listOf(RawQualityDepartment()),
+    private val threadQualityDepartment: List<ThreadQualityDepartment> = listOf(ThreadQualityDepartment()),
+    private val coloredThreadsQualityDepartment: List<ColoredThreadsQualityDepartment> = listOf(
+        ColoredThreadsQualityDepartment()
+    ),
+    private val threadProducers: List<ThreadProducer> = listOf(ThreadProducer()),
+    private val coloredThreadProducer: List<ColoredThreadProducer> = listOf(ColoredThreadProducer())
+) {
+
+    companion object {
+        fun getDefaultFactory(): TextileFactory {
+            return TextileFactory()
+        }
+    }
 
     fun start() {
-        val interval = Observable.interval(5, TimeUnit.SECONDS)
-        interval
-            .map { RawMaterials(Math.random() * 100 + 100) }
-            .map { rawMaterials ->
-                val report = Report(
-                    date = DateFormat.getDateTimeInstance().format(Date()),
-                    rawMaterial = rawMaterials.amount
-                )
-                Pair(report, rawMaterials)
-            }.map { pair ->
-                val rawMaterials = pair.second
-                RawQualityDepartment.control(rawMaterials)
-                val threads = ThreadProducer.produce(rawMaterials)
-                val report = pair.first
-                report.threads = threads.amount
-                report.defectiveRawMaterial = report.rawMaterial - rawMaterials.amount
-                report.threadsProduced = ThreadProducer.totalProduced
-                report.percentThreadProducing = ThreadProducer.percentUsefulness
-                Pair(report, threads)
-            }
-            .map { pair ->
-                val threads = pair.second
-                ThreadQualityDepartment.control(threads)
-                val coloredThreads = ColoredThreadProducer.produce(threads)
-                val report = pair.first
-                report.defectiveThreads = report.threads - threads.amount
-                report.coloredThread = coloredThreads.amount
-                report.color = coloredThreads.color
-                report.coloredThreadProduced = ColoredThreadProducer.totalProduced
-                report.percentColoredThreadProducing = ColoredThreadProducer.percentUsefulness
-                Pair(report, coloredThreads)
-            }.map { pair ->
-                val coloredThreads = pair.second
-                ColoredThreadsQualityDepartment.control(coloredThreads)
-                val report = pair.first
-                report.defectiveColoredThread = report.coloredThread - coloredThreads.amount
-                report
-            }.blockingSubscribe { report: Report? -> println(report) }
+        val compositeDisposable = CompositeDisposable()
+        compositeDisposable.add(transporter.startManageRawMaterial(rawQualityDepartments))
+        compositeDisposable.add(transporter.startManageCheckedRawMaterial(threadProducers))
+        compositeDisposable.add(transporter.startManageThreads(threadQualityDepartment))
+        compositeDisposable.add(transporter.startManageCheckedThreads(coloredThreadProducer))
+        compositeDisposable.add(transporter.startManageColoredThreads(coloredThreadsQualityDepartment))
+
+        val interval = Observable.interval(5, TimeUnit.SECONDS).startWith(1)
+        interval.map {
+            storage.putRawMaterial((Random.nextInt(200) + 100).toDouble())
+        }.mergeWith(Observable.interval(100, TimeUnit.MILLISECONDS)
+            .map {
+                storage.stat()
+            }).subscribe()
+
+        sleep(30000)
     }
 }

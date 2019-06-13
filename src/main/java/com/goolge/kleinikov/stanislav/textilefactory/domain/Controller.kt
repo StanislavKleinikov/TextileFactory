@@ -1,5 +1,5 @@
 package com.goolge.kleinikov.stanislav.textilefactory.domain
 
-interface Controller<T> {
-    fun control(material: T)
+interface Controller<in T, out R> {
+    fun control(material: T): R
 }

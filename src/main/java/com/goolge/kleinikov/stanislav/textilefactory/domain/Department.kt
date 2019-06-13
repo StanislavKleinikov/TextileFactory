@@ -1,64 +1,78 @@
 package com.goolge.kleinikov.stanislav.textilefactory.domain
 
+import java.lang.Thread.sleep
 import kotlin.random.Random
 
 sealed class Department<T> {
 
     var totalProcessed: Double = 0.0
 
-    sealed class ExecutionDepartment<T, R> : Department<T>(),
+    sealed class ExecutionDepartment<T : Material, R> : Department<T>(),
         Producer<T, R> {
 
         var totalProduced: Double = 0.0
         val percentUsefulness: Double get() = totalProduced * 100 / totalProcessed
 
-        object ThreadProducer : ExecutionDepartment<Material.RawMaterials, Material.Threads>() {
-            override fun produce(material: Material.RawMaterials): Material.Threads {
-                val threads = Material.Threads(material.amount - material.amount * Random.nextDouble(0.5))
+        class ThreadProducer : ExecutionDepartment<Material.RawMaterials, Double>() {
+            val producePerTime = 10.0
+            override fun produce(material: Material.RawMaterials): Double {
+                val produced = material.amount //amountToCheck * Random.nextDouble(0.3)
                 totalProcessed += material.amount
-                totalProduced += threads.amount
-                return threads
+                totalProduced += produced
+                sleep(100)
+                return produced
             }
         }
 
-        object ColoredThreadProducer : ExecutionDepartment<Material.Threads, Material.ColoredThreads>() {
+        class ColoredThreadProducer : ExecutionDepartment<Material.Threads, Material.ColoredThreads>() {
+            val producePerTime = 10.0
+            private val colors = Color.values()
+
             override fun produce(material: Material.Threads): Material.ColoredThreads {
-                val coloredThreads = Material.ColoredThreads(
-                    material.amount - material.amount * Random.nextDouble(0.5),
-                    Color.values()[Random.nextInt(3) + 1]
-                )
+                val produced = material.amount //amountToCheck * Random.nextDouble(0.3)
                 totalProcessed += material.amount
-                totalProduced += coloredThreads.amount
-                return coloredThreads
+                totalProduced += produced
+                sleep(100)
+                return Material.ColoredThreads(produced, colors[Random.nextInt(Color.values().size)])
             }
         }
     }
 
-    sealed class QualityDepartment<T> : Department<T>(),
-        Controller<T> {
+    sealed class QualityDepartment<T, R> : Department<T>(),
+        Controller<T, R> {
 
         var totalDefective: Double = 0.0
         val totalSatisfied: Double get() = totalProcessed - totalDefective
         val percentSatisfied: Double get() = totalSatisfied * 100 / totalProcessed
 
-        object RawQualityDepartment : QualityDepartment<Material.RawMaterials>() {
-            override fun control(material: Material.RawMaterials) {
-                totalProcessed += material.amount
-                material.amount = material.amount - material.amount * Random.nextDouble(0.3)
+        class RawQualityDepartment : QualityDepartment<Material.RawMaterials, Double>() {
+            val checkPerTime = 10.0
+            override fun control(material: Material.RawMaterials): Double {
+                val defective = 0 //amountToCheck * Random.nextDouble(0.3)
+                totalDefective += defective
+                sleep(100)
+                return material.amount - defective
             }
         }
 
-        object ThreadQualityDepartment : QualityDepartment<Material.Threads>() {
-            override fun control(material: Material.Threads) {
-                totalProcessed += material.amount
-                material.amount = material.amount - material.amount * Random.nextDouble(0.3)
+        class ThreadQualityDepartment : QualityDepartment<Material.Threads, Double>() {
+            val checkPerTime = 10.0
+            override fun control(material: Material.Threads): Double {
+                val defective = 0 //amountToCheck * Random.nextDouble(0.3)
+                totalDefective += defective
+                sleep(100)
+                return material.amount - defective
             }
         }
 
-        object ColoredThreadsQualityDepartment : QualityDepartment<Material.ColoredThreads>() {
-            override fun control(material: Material.ColoredThreads) {
-                totalProcessed += material.amount
-                material.amount = material.amount - material.amount * Random.nextDouble(0.3)
+        class ColoredThreadsQualityDepartment : QualityDepartment<Material.ColoredThreads, Material.ColoredThreads>() {
+            val checkPerTime = 10.0
+            override fun control(material: Material.ColoredThreads): Material.ColoredThreads {
+                val defective = 0 //amountToCheck * Random.nextDouble(0.3)
+                totalDefective += defective
+                sleep(100)
+                material.amount-=defective
+                return material
             }
         }
     }

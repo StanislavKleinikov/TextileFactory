@@ -1,31 +1,31 @@
 package com.goolge.kleinikov.stanislav.textilefactory.usecase
 
+import com.goolge.kleinikov.stanislav.textilefactory.domain.Consignment
 import com.goolge.kleinikov.stanislav.textilefactory.domain.Department.ExecutionDepartment.ColoredThreadProducer
 import com.goolge.kleinikov.stanislav.textilefactory.domain.Department.ExecutionDepartment.ThreadProducer
 import com.goolge.kleinikov.stanislav.textilefactory.domain.Department.QualityDepartment.*
 import com.goolge.kleinikov.stanislav.textilefactory.domain.Material
-import com.goolge.kleinikov.stanislav.textilefactory.domain.Storage
 import io.reactivex.Observable
 import io.reactivex.Scheduler
 import io.reactivex.disposables.Disposable
 
 class Transporter(
-    private val storage: Storage,
+    private val consignment: Consignment,
     private val scheduler: Scheduler
 ) {
 
     fun startManageRawMaterial(departments: List<RawQualityDepartment>): Disposable {
-        return storage.rawMaterialManager
+        return consignment.rawMaterialManager
             .flatMapIterable { departments }
             .map { department ->
                 Observable
                     .just(department)
-                    .repeatUntil { storage.rawMaterialRemaining() == 0.0 }
+                    .repeatUntil { consignment.rawMaterialRemaining() == 0.0 }
                     .map {
-                        val toCheck = storage.getRawMaterial(department.checkPerTime)
+                        val toCheck = consignment.getRawMaterial(department.checkPerTime)
                         if (toCheck > 0) {
                             val checked = department.control(Material.RawMaterials(toCheck))
-                            storage.putCheckedRawMaterial(checked)
+                            consignment.putCheckedRawMaterial(checked)
                         }
                     }
                     .subscribeOn(scheduler)
@@ -36,17 +36,17 @@ class Transporter(
     }
 
     fun startManageCheckedRawMaterial(departments: List<ThreadProducer>): Disposable {
-        return storage.checkedRawMaterialManager
+        return consignment.checkedRawMaterialManager
             .flatMapIterable { departments }
             .map { department ->
                 Observable
                     .just(department)
-                    .repeatUntil { storage.checkedRawMaterialRemaining() == 0.0 }
+                    .repeatUntil { consignment.checkedRawMaterialRemaining() == 0.0 }
                     .map {
-                        val toProduce = storage.getCheckedRawMaterial(department.producePerTime)
+                        val toProduce = consignment.getCheckedRawMaterial(department.producePerTime)
                         if (toProduce > 0) {
                             val produced = department.produce(Material.RawMaterials(toProduce))
-                            storage.putThreads(produced)
+                            consignment.putThreads(produced)
                         }
                     }
                     .subscribeOn(scheduler)
@@ -57,17 +57,17 @@ class Transporter(
     }
 
     fun startManageThreads(departments: List<ThreadQualityDepartment>): Disposable {
-        return storage.threadsManager
+        return consignment.threadsManager
             .flatMapIterable { departments }
             .map { department ->
                 Observable
                     .just(department)
-                    .repeatUntil { storage.threadsRemaining() == 0.0 }
+                    .repeatUntil { consignment.threadsRemaining() == 0.0 }
                     .map {
-                        val toCheck = storage.getThreads(department.checkPerTime)
+                        val toCheck = consignment.getThreads(department.checkPerTime)
                         if (toCheck > 0) {
                             val checked = department.control(Material.Threads(toCheck))
-                            storage.putCheckedThreads(checked)
+                            consignment.putCheckedThreads(checked)
                         }
                     }
                     .subscribeOn(scheduler)
@@ -78,17 +78,17 @@ class Transporter(
     }
 
     fun startManageCheckedThreads(departments: List<ColoredThreadProducer>): Disposable {
-        return storage.checkedThreadsManager
+        return consignment.checkedThreadsManager
             .flatMapIterable { departments }
             .map { department ->
                 Observable
                     .just(department)
-                    .repeatUntil { storage.checkedThreadsRemaining() == 0.0 }
+                    .repeatUntil { consignment.checkedThreadsRemaining() == 0.0 }
                     .map {
-                        val toProduce = storage.getCheckedThreads(department.producePerTime)
+                        val toProduce = consignment.getCheckedThreads(department.producePerTime)
                         if (toProduce > 0) {
                             val produced = department.produce(Material.Threads(toProduce))
-                            storage.putColoredThreads(produced)
+                            consignment.putColoredThreads(produced)
                         }
                     }
                     .subscribeOn(scheduler)
@@ -99,18 +99,18 @@ class Transporter(
     }
 
     fun startManageColoredThreads(departments: List<ColoredThreadsQualityDepartment>): Disposable {
-        return storage.coloredThreadManager
+        return consignment.coloredThreadManager
             .flatMapIterable { departments }
             .map { department ->
                 Observable
                     .just(department)
-                    .repeatUntil { storage.coloredThreadsRemaining() > 0 }
+                    .repeatUntil { consignment.coloredThreadsRemaining() > 0 }
                     .map {
-                         val toCheck = storage.getColoredThreads(department.checkPerTime)
-                         if (toCheck != null) {
-                             val checked = department.control(toCheck)
-                             storage.putCheckedColoredThreads(checked)
-                         }
+                        val toCheck = consignment.getColoredThreads(department.checkPerTime)
+                        if (toCheck != null) {
+                            val checked = department.control(toCheck)
+                            consignment.putCheckedColoredThreads(checked)
+                        }
                     }
                     .subscribeOn(scheduler)
                     .subscribe()

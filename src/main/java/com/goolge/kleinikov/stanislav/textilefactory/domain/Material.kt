@@ -6,10 +6,10 @@ sealed class Material(var amount: Double) {
 
     class Threads(amount: Double) : Material(amount)
 
-    class ColoredThreads(amount: Double, val color: Color) : Material(amount) {
-        override fun toString(): String {
-            return "$amount"
-        }
+    class ColoredThreads(amount: Double, val color: Color) : Material(amount)
+
+    override fun toString(): String {
+        return "$amount"
     }
 }
 

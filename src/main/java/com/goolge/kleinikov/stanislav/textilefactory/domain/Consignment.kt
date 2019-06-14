@@ -1,10 +1,15 @@
 package com.goolge.kleinikov.stanislav.textilefactory.domain
 
+import io.reactivex.Observable
 import io.reactivex.subjects.BehaviorSubject
 
-class Consignment(private val date: String) {
+class Consignment(val id: Long, private val date: String) {
 
-    private var totalMaterial: Double = 0.0
+    val totalMaterials: Double = 0.0
+    var rawMaterials: Double = 0.0
+    var checkedRawMaterials: Double = 0.0
+
+    /*private var totalMaterial: Double = 0.0
     private var rawMaterial: Material.RawMaterials = Material.RawMaterials(0.0)
     private var defectiveRawMaterial: Material.RawMaterials = Material.RawMaterials(0.0)
     private var checkedRawMaterial: Material.RawMaterials = Material.RawMaterials(0.0)
@@ -12,14 +17,40 @@ class Consignment(private val date: String) {
     private var defectiveThreads: Material.Threads = Material.Threads(0.0)
     private var checkedThreads: Material.Threads = Material.Threads(0.0)
     private var coloredThreads: MutableMap<Color, Material.ColoredThreads> = mutableMapOf()
+    private var defectiveColoredThreads: MutableMap<Color, Material.ColoredThreads> = mutableMapOf()
     private var checkedColoredThreads: MutableMap<Color, Material.ColoredThreads> = mutableMapOf()
+    private var status: Status = Status.IN_PROGRESS
 
-    val rawMaterialManager = BehaviorSubject.create<Consignment>()
-    val checkedRawMaterialManager = BehaviorSubject.create<Consignment>()
-    val threadsManager = BehaviorSubject.create<Consignment>()
-    val checkedThreadsManager = BehaviorSubject.create<Consignment>()
-    val coloredThreadManager = BehaviorSubject.create<Consignment>()
-    val completedConsignmentManager = BehaviorSubject.create<Consignment>()
+    private val rawMaterialManager = BehaviorSubject.create<Consignment>()
+    private val checkedRawMaterialManager = BehaviorSubject.create<Consignment>()
+    private val threadsManager = BehaviorSubject.create<Consignment>()
+    private val checkedThreadsManager = BehaviorSubject.create<Consignment>()
+    private val coloredThreadManager = BehaviorSubject.create<Consignment>()
+    private val completedConsignmentManager = BehaviorSubject.create<Consignment>()
+
+    fun getRawMaterialManager(): Observable<Consignment> {
+        return rawMaterialManager
+    }
+
+    fun getCheckedRawMaterialManager(): Observable<Consignment> {
+        return checkedRawMaterialManager
+    }
+
+    fun getThreadManager(): Observable<Consignment> {
+        return threadsManager
+    }
+
+    fun getCheckedThreadManager(): Observable<Consignment> {
+        return checkedThreadsManager
+    }
+
+    fun getColoredThreadManager(): Observable<Consignment> {
+        return coloredThreadManager
+    }
+
+    fun getCompletedConsignmentManager(): Observable<Consignment> {
+        return completedConsignmentManager
+    }
 
     fun rawMaterialRemaining(): Double {
         return rawMaterial.amount
@@ -35,6 +66,7 @@ class Consignment(private val date: String) {
     fun getRawMaterial(size: Double): Double {
         return rawMaterial.reduce(size)
     }
+
 
     fun checkedRawMaterialRemaining(): Double {
         return checkedRawMaterial.amount
@@ -115,21 +147,27 @@ class Consignment(private val date: String) {
             .getOrPut(threads.color) { Material.ColoredThreads(0.0, threads.color) }
         coloredThreads.increase(threads.amount)
         if (checkedColoredThreadsRemaining() == totalMaterial) {
+            status = Status.COMPLETED
             completedConsignmentManager.onNext(this)
         }
     }
 
 
     override fun toString(): String {
-        return """Report(date='$date',
+        return """
+                 |-------------------- Consignment ---------------------
+                 |(date='$date',
                  |total raw material = $totalMaterial
                  |raw material = $rawMaterial kilo,
                  |defective raw material = $defectiveRawMaterial kilo,
                  |threads were produced = $threads m,
                  |defective threads in the batch = $defectiveThreads m,
-                 |coloredThreads were produced = $checkedColoredThreads
+                 |colored threads were produced = $checkedColoredThreads
+                 |defective colored threads = $defectiveColoredThreads
+                 |status = $status
+                 |------------------------------------------------------
                  |""".trimMargin()
-    }
+    }*/
 }
 
 

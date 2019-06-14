@@ -13,9 +13,9 @@ class Transporter(
     private val consignment: Consignment,
     private val scheduler: Scheduler
 ) {
-
+/*
     fun startManageRawMaterial(departments: List<RawQualityDepartment>): Disposable {
-        return consignment.rawMaterialManager
+        return consignment.getRawMaterialManager()
             .flatMapIterable { departments }
             .map { department ->
                 Observable
@@ -36,7 +36,7 @@ class Transporter(
     }
 
     fun startManageCheckedRawMaterial(departments: List<ThreadProducer>): Disposable {
-        return consignment.checkedRawMaterialManager
+        return consignment.getCheckedRawMaterialManager()
             .flatMapIterable { departments }
             .map { department ->
                 Observable
@@ -57,7 +57,7 @@ class Transporter(
     }
 
     fun startManageThreads(departments: List<ThreadQualityDepartment>): Disposable {
-        return consignment.threadsManager
+        return consignment.getThreadManager()
             .flatMapIterable { departments }
             .map { department ->
                 Observable
@@ -78,7 +78,7 @@ class Transporter(
     }
 
     fun startManageCheckedThreads(departments: List<ColoredThreadProducer>): Disposable {
-        return consignment.checkedThreadsManager
+        return consignment.getCheckedThreadManager()
             .flatMapIterable { departments }
             .map { department ->
                 Observable
@@ -99,7 +99,7 @@ class Transporter(
     }
 
     fun startManageColoredThreads(departments: List<ColoredThreadsQualityDepartment>): Disposable {
-        return consignment.coloredThreadManager
+        return consignment.getColoredThreadManager()
             .flatMapIterable { departments }
             .map { department ->
                 Observable
@@ -117,5 +117,5 @@ class Transporter(
             }
             .subscribeOn(scheduler)
             .subscribe()
-    }
+    }*/
 }

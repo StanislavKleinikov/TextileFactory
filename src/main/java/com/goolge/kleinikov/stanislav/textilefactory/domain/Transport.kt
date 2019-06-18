@@ -1,124 +1,144 @@
 package com.goolge.kleinikov.stanislav.textilefactory.domain
 
 import com.goolge.kleinikov.stanislav.textilefactory.domain.Department.QualityDepartment.*
-import io.reactivex.Observable
+import io.reactivex.BackpressureStrategy
+import io.reactivex.Flowable
 import io.reactivex.disposables.CompositeDisposable
 import io.reactivex.disposables.Disposable
 import io.reactivex.schedulers.Schedulers
 
 class Transport(
-    private val storage: Storage,
-    private val rawQualityDepartments: List<RawQualityDepartment>,
-    private val threadQualityDepartment: List<ThreadQualityDepartment>,
-    private val coloredThreadsQualityDepartment: List<ColoredThreadsQualityDepartment>,
-    private val threadProducers: List<Department.ExecutionDepartment.ThreadProducer>,
-    private val coloredThreadProducer: List<Department.ExecutionDepartment.ColoredThreadProducer>
+        private val storage: Storage,
+        private val rawQualityDepartments: List<RawQualityDepartment>,
+        private val threadQualityDepartment: List<ThreadQualityDepartment>,
+        private val coloredThreadsQualityDepartment: List<ColoredThreadsQualityDepartment>,
+        private val threadProducers: List<Department.ExecutionDepartment.ThreadProducer>,
+        private val coloredThreadProducer: List<Department.ExecutionDepartment.ColoredThreadProducer>
 ) {
 
     fun startManageStorage(): CompositeDisposable {
         val compositeDisposable = CompositeDisposable()
         compositeDisposable.add(startManageRawMaterial())
+        compositeDisposable.add(startManageCheckedRawMaterial())
+        compositeDisposable.add(startManageThreads())
+        compositeDisposable.add(startManageCheckedThreads())
+        compositeDisposable.add(startManageColoredThreads())
         return compositeDisposable
     }
 
     private fun startManageRawMaterial(): Disposable {
         return storage.getRawMaterialManager()
-            .flatMapIterable { rawQualityDepartments }
-            .map { department ->
-                storage.getRawMaterial(department.checkPerTime)
-                    .repeatUntil { storage.rawMaterialRemaining() > 0 }
-                    .takeWhile { dto -> dto.amount > 0 }
-                    .map { dto ->
-                        val checked = department.control(Material.RawMaterials(dto.amount))
-                        storage.putCheckedRawMaterial(dto.id, checked)
-                    }
-                    .subscribe()
-            }
-            .subscribeOn(Schedulers.io())
-            .subscribe()
+                .toFlowable(BackpressureStrategy.LATEST)
+                .concatMap {
+                    createRawMaterialObservable()
+                }
+                .subscribe()
     }
 
-   /* fun startManageCheckedRawMaterial(departments: List<Department.ExecutionDepartment.ThreadProducer>): Disposable {
+    private fun createRawMaterialObservable(): Flowable<Unit> {
+        return Flowable.fromIterable(rawQualityDepartments)
+                .flatMap { department ->
+                    storage.getRawMaterial(department.checkPerTime)
+                            .subscribeOn(Schedulers.io())
+                            .repeatUntil { storage.rawMaterialRemaining() == 0.0 }
+                            .map { dto ->
+                                val defective = department.control(dto.material)
+                                storage.putCheckedRawMaterial(dto.id, dto.material.amount, defective)
+                            }
+                }
+                .map { Unit }
+    }
+
+    private fun startManageCheckedRawMaterial(): Disposable {
         return storage.getCheckedRawMaterialManager()
-            .flatMapIterable { departments }
-            .map { department ->
-                Observable
-                    .just(department)
-                    .repeatUntil { storage.checkedRawMaterialRemaining() == 0.0 }
-                    .map {
-                        val toProduce = storage.getCheckedRawMaterial(department.producePerTime)
-                        if (toProduce > 0) {
-                            val produced = department.produce(Material.RawMaterials(toProduce))
-                            storage.putThreads(produced)
-                        }
-                    }
-                    .subscribeOn(Schedulers.io())
-                    .subscribe()
-            }
-            .subscribeOn(Schedulers.io())
-            .subscribe()
+                .toFlowable(BackpressureStrategy.LATEST)
+                .concatMap {
+                    createCheckedRawMaterialObservable()
+                }
+                .subscribe()
     }
 
-    fun startManageThreads(departments: List<ThreadQualityDepartment>): Disposable {
-        return storage.getThreadManager()
-            .flatMapIterable { departments }
-            .map { department ->
-                Observable
-                    .just(department)
-                    .repeatUntil { storage.threadsRemaining() == 0.0 }
-                    .map {
-                        val toCheck = storage.getThreads(department.checkPerTime)
-                        if (toCheck > 0) {
-                            val checked = department.control(Material.Threads(toCheck))
-                            storage.putCheckedThreads(checked)
-                        }
-                    }
-                    .subscribeOn(Schedulers.io())
-                    .subscribe()
-            }
-            .subscribeOn(Schedulers.io())
-            .subscribe()
+    private fun createCheckedRawMaterialObservable(): Flowable<Unit> {
+        return Flowable.fromIterable(threadProducers)
+                .flatMap { department ->
+                    storage.getCheckedRawMaterial(department.producePerTime)
+                            .subscribeOn(Schedulers.io())
+                            .repeatUntil { storage.checkedRawMaterialRemaining() == 0.0 }
+                            .map { dto ->
+                                val produced = department.produce(dto.material)
+                                storage.putThreads(dto.id, produced)
+                            }
+                }
+                .map { Unit }
     }
 
-    fun startManageCheckedThreads(departments: List<Department.ExecutionDepartment.ColoredThreadProducer>): Disposable {
-        return storage.getCheckedThreadManager()
-            .flatMapIterable { departments }
-            .map { department ->
-                Observable
-                    .just(department)
-                    .repeatUntil { storage.checkedThreadsRemaining() == 0.0 }
-                    .map {
-                        val toProduce = storage.getCheckedThreads(department.producePerTime)
-                        if (toProduce > 0) {
-                            val produced = department.produce(Material.Threads(toProduce))
-                            storage.putColoredThreads(produced)
-                        }
-                    }
-                    .subscribeOn(Schedulers.io())
-                    .subscribe()
-            }
-            .subscribeOn(Schedulers.io())
-            .subscribe()
+    private fun startManageThreads(): Disposable {
+        return storage.getThreadsManager()
+                .toFlowable(BackpressureStrategy.LATEST)
+                .concatMap {
+                    createThreadsObservable()
+                }
+                .subscribe()
     }
 
-    fun startManageColoredThreads(departments: List<ColoredThreadsQualityDepartment>): Disposable {
-        return storage.getColoredThreadManager()
-            .flatMapIterable { departments }
-            .map { department ->
-                Observable
-                    .just(department)
-                    .repeatUntil { storage.coloredThreadsRemaining() > 0 }
-                    .map {
-                        val toCheck = storage.getColoredThreads(department.checkPerTime)
-                        if (toCheck != null) {
-                            val checked = department.control(toCheck)
-                            storage.putCheckedColoredThreads(checked)
-                        }
-                    }
-                    .subscribeOn(Schedulers.io())
-                    .subscribe()
-            }
-            .subscribeOn(Schedulers.io())
-            .subscribe()
-    }*/
+    private fun createThreadsObservable(): Flowable<Unit> {
+        return Flowable.fromIterable(threadQualityDepartment)
+                .flatMap { department ->
+                    storage.getThreads(department.checkPerTime)
+                            .subscribeOn(Schedulers.io())
+                            .repeatUntil { storage.threadsRemaining() == 0.0 }
+                            .map { dto ->
+                                val defective = department.control(dto.material)
+                                storage.putCheckedThreads(dto.id, dto.material.amount, defective)
+                            }
+                }
+                .map { Unit }
+    }
+
+
+    private fun startManageCheckedThreads(): Disposable {
+        return storage.getCheckedThreadsManager()
+                .toFlowable(BackpressureStrategy.LATEST)
+                .concatMap {
+                    createCheckedThreadsObservable()
+                }
+                .subscribe()
+    }
+
+    private fun createCheckedThreadsObservable(): Flowable<Unit> {
+        return Flowable.fromIterable(coloredThreadProducer)
+                .flatMap { department ->
+                    storage.getCheckedThreads(department.producePerTime)
+                            .subscribeOn(Schedulers.io())
+                            .repeatUntil { storage.checkedThreadsRemaining() == 0.0 }
+                            .map { dto ->
+                                val produced = department.produce(dto.material)
+                                storage.putColoredThreads(dto.id, produced.amount, produced.color)
+                            }
+                }
+                .map { Unit }
+    }
+
+    private fun startManageColoredThreads(): Disposable {
+        return storage.getColoredThreadsManager()
+                .toFlowable(BackpressureStrategy.LATEST)
+                .concatMap {
+                    createColoredThreadsObservable()
+                }
+                .subscribe()
+    }
+
+    private fun createColoredThreadsObservable(): Flowable<Unit> {
+        return Flowable.fromIterable(coloredThreadsQualityDepartment)
+                .flatMap { department ->
+                    storage.getColoredThreads(department.checkPerTime)
+                            .subscribeOn(Schedulers.io())
+                            .repeatUntil { storage.coloredThreadsRemaining() == 0.0 }
+                            .map { dto ->
+                                val defective = department.control(dto.material)
+                                storage.putCheckedColoredThreads(dto.id, dto.material.amount, defective, dto.material.color)
+                            }
+                }
+                .map { Unit }
+    }
 }

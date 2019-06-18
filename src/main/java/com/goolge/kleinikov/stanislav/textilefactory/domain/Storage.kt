@@ -1,155 +1,213 @@
 package com.goolge.kleinikov.stanislav.textilefactory.domain
 
-import io.reactivex.Completable
 import io.reactivex.Maybe
 import io.reactivex.Observable
-import io.reactivex.Single
 import io.reactivex.disposables.Disposable
 import io.reactivex.schedulers.Schedulers
 import io.reactivex.subjects.BehaviorSubject
+import java.util.concurrent.CopyOnWriteArrayList
 
 class Storage {
 
-    private val consignments: MutableList<Consignment> = mutableListOf()
+    private val consignments: MutableList<Consignment> = CopyOnWriteArrayList()
 
-    private val rawMaterialManager = BehaviorSubject.create<Storage>()
-    private val checkedRawMaterialManager = BehaviorSubject.create<Storage>()
-    private val threadsManager = BehaviorSubject.create<Storage>()
-    private val checkedThreadsManager = BehaviorSubject.create<Storage>()
-    private val coloredThreadManager = BehaviorSubject.create<Storage>()
-    private val completedConsignmentManager = BehaviorSubject.create<Storage>()
+    private val rawMaterialManager = BehaviorSubject.create<Unit>()
+    private val checkedRawMaterialManager = BehaviorSubject.create<Unit>()
+    private val threadsManager = BehaviorSubject.create<Unit>()
+    private val checkedThreadsManager = BehaviorSubject.create<Unit>()
+    private val coloredThreadsManager = BehaviorSubject.create<Unit>()
+    private val completedConsignmentManager = BehaviorSubject.create<Consignment>()
 
     fun processNewConsignment(consignment: Consignment) {
         consignments.add(consignment)
-        rawMaterialManager.onNext(this)
+        rawMaterialManager.onNext(Unit)
     }
 
-    fun getRawMaterialManager(): Observable<Storage> {
+    fun getRawMaterialManager(): Observable<Unit> {
         return rawMaterialManager
     }
 
-    fun getCheckedRawMaterialManager(): Observable<Storage> {
+    fun getCheckedRawMaterialManager(): Observable<Unit> {
         return checkedRawMaterialManager
     }
 
-    fun getThreadManager(): Observable<Storage> {
+    fun getThreadsManager(): Observable<Unit> {
         return threadsManager
     }
 
-    fun getCheckedThreadManager(): Observable<Storage> {
+    fun getCheckedThreadsManager(): Observable<Unit> {
         return checkedThreadsManager
     }
 
-    fun getColoredThreadManager(): Observable<Storage> {
-        return coloredThreadManager
+    fun getColoredThreadsManager(): Observable<Unit> {
+        return coloredThreadsManager
     }
 
-    fun getCompletedConsignmentManager(): Observable<Storage> {
+    fun getCompletedConsignmentManager(): Observable<Consignment> {
         return completedConsignmentManager
     }
 
     fun rawMaterialRemaining(): Double {
-        return consignments.sumByDouble { consignment -> consignment.rawMaterials }
+        return consignments.sumByDouble { consignment -> consignment.rawMaterial.amount }
     }
 
-    fun getRawMaterial(size: Double): Maybe<MaterialDTO> {
+    fun getRawMaterial(size: Double): Maybe<MaterialDTO<Material.RawMaterial>> {
         return Observable
-            .fromIterable(consignments)
-            .filter { consignment -> consignment.rawMaterials > 0 }
-            .firstElement()
-            .map { consignment ->
-                var returnValue = size
-                val amount = consignment.rawMaterials
-                if (amount < size) {
-                    returnValue = amount
+                .fromIterable(consignments)
+                .filter { consignment -> consignment.rawMaterial.amount > 0 }
+                .firstElement()
+                .map { consignment ->
+                    MaterialDTO(consignment.id, Material.RawMaterial(consignment.rawMaterial.reduce(size)))
                 }
-                consignment.rawMaterials -= returnValue
-                MaterialDTO(consignment.id, returnValue)
-            }
     }
 
-    fun putCheckedRawMaterial(id: Long, size: Double): Disposable {
+    fun putCheckedRawMaterial(id: Long, total: Double, defective: Double): Disposable {
         return Observable.fromIterable(consignments)
-            .filter { consignment -> consignment.id == id }
-            .firstElement()
-            .map { consignment ->
-                consignment.rawMaterials += size
-                checkedRawMaterialManager.onNext(this)
-            }.subscribe()
+                .filter { consignment -> consignment.id == id }
+                .firstElement()
+                .map { consignment ->
+                    consignment.checkedRawMaterial.increase(total - defective)
+                    consignment.defectiveRawMaterial.increase(defective)
+                    checkedRawMaterialManager.onNext(Unit)
+                }.subscribe()
     }
 
-    /* fun getCheckedRawMaterial(size: Double): Double {
-         return checkedRawMaterial.reduce(size)
-     }*/
+    fun checkedRawMaterialRemaining(): Double {
+        return consignments.sumByDouble { consignment -> consignment.checkedRawMaterial.amount }
+    }
 
-    /* fun threadsRemaining(): Double {
-         return threads.amount
-     }
 
-     fun putThreads(size: Double) {
-         threads.increase(size)
-         threadsManager.onNext(this)
-     }
+    fun getCheckedRawMaterial(size: Double): Maybe<MaterialDTO<Material.RawMaterial>> {
+        return Observable
+                .fromIterable(consignments)
+                .filter { consignment -> consignment.checkedRawMaterial.amount > 0 }
+                .firstElement()
+                .map { consignment ->
+                    MaterialDTO(consignment.id, Material.RawMaterial(consignment.checkedRawMaterial.reduce(size)))
+                }
+    }
 
-     fun getThreads(size: Double): Double {
-         return threads.reduce(size)
-     }
+    fun threadsRemaining(): Double {
+        return consignments.sumByDouble { consignment -> consignment.threads.amount }
+    }
 
-     fun checkedThreadsRemaining(): Double {
-         return checkedThreads.amount
-     }
 
-     fun putCheckedThreads(size: Double) {
-         checkedThreads.increase(size)
-         checkedThreadsManager.onNext(this)
-     }
+    fun putThreads(id: Long, produced: Double): Disposable {
+        return Observable.fromIterable(consignments)
+                .filter { consignment -> consignment.id == id }
+                .firstElement()
+                .map { consignment ->
+                    consignment.threads.increase(produced)
+                    consignment.threadsProduced.increase(produced)
+                    threadsManager.onNext(Unit)
+                }
+                .subscribe()
+    }
 
-     fun getCheckedThreads(size: Double): Double {
-         return checkedThreads.reduce(size)
-     }
+    fun getThreads(size: Double): Maybe<MaterialDTO<Material.Threads>> {
+        return Observable
+                .fromIterable(consignments)
+                .filter { consignment -> consignment.threads.amount > 0 }
+                .firstElement()
+                .map { consignment ->
+                    MaterialDTO(consignment.id, Material.Threads(consignment.threads.reduce(size)))
+                }
+    }
 
-     fun coloredThreadsRemaining(): Double {
-         synchronized(coloredThreads) {
-             return coloredThreads.values.sumByDouble { coloredThreads -> coloredThreads.amount }
-         }
-     }
+    fun checkedThreadsRemaining(): Double {
+        return consignments.sumByDouble { consignment -> consignment.checkedThreads.amount }
+    }
 
-     fun putColoredThreads(threads: Material.ColoredThreads) {
-         synchronized(coloredThreads) {
-             val coloredThreads = coloredThreads
-                 .getOrPut(threads.color) { Material.ColoredThreads(0.0, threads.color) }
-             coloredThreads.increase(threads.amount)
-         }
-         coloredThreadManager.onNext(this)
-     }
+    fun putCheckedThreads(id: Long, total: Double, defective: Double): Disposable {
+        return Observable.fromIterable(consignments)
+                .filter { consignment -> consignment.id == id }
+                .firstElement()
+                .map { consignment ->
+                    consignment.checkedThreads.increase(total - defective)
+                    consignment.defectiveThreads.increase(defective)
+                    checkedThreadsManager.onNext(Unit)
+                }
+                .subscribe()
+    }
 
-     fun getColoredThreads(size: Double): Material.ColoredThreads? {
-         synchronized(coloredThreads) {
-             if (coloredThreads.isNotEmpty()) {
-                 val random = coloredThreads.filterValues { coloredThreads -> coloredThreads.amount > 0 }
-                 if (random.isNotEmpty()) {
-                     val coloredThreads = random.values.random()
-                     val reduced = coloredThreads.reduce(size)
-                     return Material.ColoredThreads(reduced, coloredThreads.color)
-                 }
-             }
-             return null
-         }
-     }
+    fun getCheckedThreads(size: Double): Maybe<MaterialDTO<Material.Threads>> {
+        return Observable
+                .fromIterable(consignments)
+                .filter { consignment -> consignment.checkedThreads.amount > 0 }
+                .firstElement()
+                .map { consignment ->
+                    MaterialDTO(consignment.id, Material.Threads(consignment.checkedThreads.reduce(size)))
+                }
+    }
 
-     fun checkedColoredThreadsRemaining(): Double {
-         synchronized(checkedColoredThreads) {
-             return checkedColoredThreads.values.sumByDouble { coloredThreads -> coloredThreads.amount }
-         }
-     }
 
-     fun putCheckedColoredThreads(threads: Material.ColoredThreads) {
-         val coloredThreads = checkedColoredThreads
-             .getOrPut(threads.color) { Material.ColoredThreads(0.0, threads.color) }
-         coloredThreads.increase(threads.amount)
-         if (checkedColoredThreadsRemaining() == totalMaterial) {
-             status = Status.COMPLETED
-             completedConsignmentManager.onNext(this)
-         }
-     }*/
+    fun coloredThreadsRemaining(): Double {
+        return consignments.sumByDouble { consignment ->
+            consignment.coloredThreads.values
+                    .sumByDouble { coloredThreads ->
+                        coloredThreads.amount
+                    }
+        }
+    }
+
+    fun putColoredThreads(id: Long, produced: Double, color: Color): Disposable {
+        return Observable.fromIterable(consignments)
+                .filter { consignment -> consignment.id == id }
+                .firstElement()
+                .map {
+                    val coloredThreads = it.coloredThreads
+                            .getOrPut(color) { Material.ColoredThreads(0.0, color) }
+                    coloredThreads.increase(produced)
+
+                    val totalProduced = it.coloredThreadsProduced
+                            .getOrPut(color) { Material.ColoredThreads(0.0, color) }
+                    totalProduced.increase(produced)
+
+                    coloredThreadsManager.onNext(Unit)
+
+                }
+                .subscribeOn(Schedulers.single())
+                .subscribe()
+    }
+
+    fun getColoredThreads(size: Double): Maybe<MaterialDTO<Material.ColoredThreads>> {
+        return Observable
+                .fromIterable(consignments)
+                .filter { consignment ->
+                    consignment.coloredThreads.values.sumByDouble { coloredThreads -> coloredThreads.amount } > 0
+                }
+                .firstElement()
+                .map { consignment ->
+                    val threads = consignment.coloredThreads.filterValues { coloredThreads -> coloredThreads.amount > 0 }.values.random()
+                    MaterialDTO(consignment.id, Material.ColoredThreads(threads.reduce(size), threads.color))
+                }.subscribeOn(Schedulers.single())
+    }
+
+    fun putCheckedColoredThreads(id: Long, total: Double, defective: Double, color: Color): Disposable {
+        return Observable.fromIterable(consignments)
+                .filter { consignment -> consignment.id == id }
+                .firstElement()
+                .map {
+                    val coloredThreads = it.checkedColoredThreads
+                            .getOrPut(color) { Material.ColoredThreads(0.0, color) }
+                    coloredThreads.increase(total - defective)
+
+                    val defectiveThreads = it.defectiveColoredThreads
+                            .getOrPut(color) { Material.ColoredThreads(0.0, color) }
+                    defectiveThreads.increase(defective)
+
+
+                    if ((it.rawMaterial.amount
+                                    + it.checkedRawMaterial.amount
+                                    + it.threads.amount
+                                    + it.checkedThreads.amount
+                                    + it.coloredThreads.values.sumByDouble { threads -> threads.amount }
+                                    ) == 0.0) {
+                        it.status = Status.COMPLETED
+                        completedConsignmentManager.onNext(it)
+                    }
+                }
+                .subscribeOn(Schedulers.single())
+                .subscribe()
+    }
 }
